@@ -35,10 +35,10 @@ pip install groq pyautogui pygetwindow
 
 1. Sign up for free at **https://console.groq.com**
 2. Go to **API Keys** → **Create API Key**
-3. Open `ai.py` and replace line 33 with your key:
+3. Open `ai.py` and replace this line with your key:
 
 ```python
-client = Groq(api_key="gsk_YOUR_KEY_HERE")
+client = Groq(api_key="gsk_YOUR-GROK-API-KEY")
 ```
 
 ---
