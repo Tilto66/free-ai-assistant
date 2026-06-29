@@ -31,7 +31,7 @@ pyautogui.PAUSE = 0.3       # Small pause between actions for stability
 
 # ── Groq client ────────────────────────────────────────────────────────────────
 client = Groq(api_key="gsk_YOUR-GROK-API-KEY")
-MODEL = "llama-3.3-70b-versatile"   # Best free model on Groq for tool use
+MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
 
 # ── Tool definitions ───────────────────────────────────────────────────────────
 TOOLS = [
@@ -140,7 +140,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "take_screenshot",
-            "description": "Takes a screenshot and saves it. Returns the file path.",
+            "description": "Takes a screenshot and send it to the ai. Optionally specify a path to save the image.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -371,7 +371,10 @@ def execute_tool(name: str, inputs: dict) -> str:
         elif name == "take_screenshot":
             path = (inputs or {}).get("path", "screenshot.png")
             pyautogui.screenshot(path)
-            return f"Screenshot saved to: {os.path.abspath(path)}"
+            import base64
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            return f"SCREENSHOT_B64:{b64}"
  
         elif name == "list_windows":
             wins = [w.title for w in gw.getAllWindows() if w.title.strip()]
@@ -660,11 +663,23 @@ def run():
                 result = execute_tool(fn_name, fn_args)
                 print(f"  ← {result[:200]}")
  
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                })
+                print(f"  → [{fn_name}] {json.dumps(fn_args)}")
+                result = execute_tool(fn_name, fn_args)
+                display = "[image data]" if result.startswith("SCREENSHOT_B64:") else result
+                print(f"  ← {display[:200]}")
+
+                if result.startswith("SCREENSHOT_B64:"):
+                    b64 = result[len("SCREENSHOT_B64:"):]
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": "Screenshot taken."})
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                            {"type": "text", "text": "This is the screenshot. Describe what you see."}
+                        ]
+                    })
+                else:
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
  
  
 if __name__ == "__main__":

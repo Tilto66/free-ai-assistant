@@ -253,7 +253,7 @@ The model loops through tool calls until it decides the task is done, then gives
 - GUI interactions (clicking buttons) work best when preceded by a screenshot
 - Groq free tier has rate limits, but they are very generous for personal use
 - Window title matching may not always match the process name exactly
-- No linux version for now but maybe one later
+- Not tested on linux or MacOS so maybe it work maybe not
 - No api key else than Groq
 
 ---
