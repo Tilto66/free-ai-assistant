@@ -329,7 +329,7 @@ TOOLS = [
         },
     },
 ]
-
+ 
 # ── Tool executor ──────────────────────────────────────────────────────────────
 def execute_tool(name: str, inputs: dict) -> str:
     try:
@@ -343,40 +343,40 @@ def execute_tool(name: str, inputs: dict) -> str:
             else:
                 pyautogui.click(x, y)
             return f"Clicked ({x}, {y}) [{btn}]"
-
+ 
         elif name == "mouse_move":
             pyautogui.moveTo(inputs["x"], inputs["y"], duration=0.3)
             return f"Moved to ({inputs['x']}, {inputs['y']})"
-
+ 
         elif name == "mouse_scroll":
             pyautogui.scroll(inputs["clicks"], x=inputs["x"], y=inputs["y"])
             return f"Scrolled {inputs['clicks']} at ({inputs['x']}, {inputs['y']})"
-
+ 
         elif name == "keyboard_type":
             pyautogui.write(inputs["text"], interval=0.03)
             return f"Typed: {inputs['text']!r}"
-
+ 
         elif name == "keyboard_hotkey":
             pyautogui.hotkey(*inputs["keys"])
             return f"Hotkey: {'+'.join(inputs['keys'])}"
-
+ 
         elif name == "keyboard_press":
             pyautogui.press(inputs["key"])
             return f"Pressed: {inputs['key']}"
-
+ 
         elif name == "get_screen_size":
             w, h = pyautogui.size()
             return f"Screen size: {w}x{h}"
-
+ 
         elif name == "take_screenshot":
-            path = inputs.get("path", "screenshot.png")
+            path = (inputs or {}).get("path", "screenshot.png")
             pyautogui.screenshot(path)
             return f"Screenshot saved to: {os.path.abspath(path)}"
-
+ 
         elif name == "list_windows":
             wins = [w.title for w in gw.getAllWindows() if w.title.strip()]
             return json.dumps(wins, indent=2)
-
+ 
         elif name == "focus_window":
             title = inputs["title"]
             matches = gw.getWindowsWithTitle(title)
@@ -388,7 +388,7 @@ def execute_tool(name: str, inputs: dict) -> str:
             win.activate()
             time.sleep(0.3)
             return f"Focused: {win.title}"
-
+ 
         elif name == "close_window":
             title = inputs["title"]
             matches = gw.getWindowsWithTitle(title)
@@ -398,7 +398,7 @@ def execute_tool(name: str, inputs: dict) -> str:
                 return f"No window found matching '{title}'"
             matches[0].close()
             return f"Closed: {matches[0].title}"
-
+ 
         elif name == "launch_app":
             target = inputs["target"]
             system = platform.system()
@@ -409,7 +409,7 @@ def execute_tool(name: str, inputs: dict) -> str:
             else:
                 subprocess.Popen(["xdg-open", target])
             return f"Launched: {target}"
-
+ 
         elif name == "run_command":
             result = subprocess.run(
                 inputs["command"],
@@ -419,7 +419,7 @@ def execute_tool(name: str, inputs: dict) -> str:
                 timeout=inputs.get("timeout", 10),
             )
             return (result.stdout or result.stderr or "(no output)")[:2000]
-
+ 
         elif name == "file_list":
             path = inputs.get("path", ".")
             entries = os.listdir(path)
@@ -428,16 +428,16 @@ def execute_tool(name: str, inputs: dict) -> str:
                 kind = "DIR" if os.path.isdir(os.path.join(path, e)) else "FILE"
                 lines.append(f"[{kind}] {e}")
             return "\n".join(lines) if lines else "(empty directory)"
-
+ 
         elif name == "file_read":
             with open(inputs["path"], "r", encoding="utf-8", errors="replace") as f:
                 return f.read(8000)
-
+ 
         elif name == "file_write":
             with open(inputs["path"], "w", encoding="utf-8") as f:
                 f.write(inputs["content"])
             return f"Written to: {inputs['path']}"
-
+ 
         elif name == "file_copy":
             src, dst = inputs["source"], inputs["destination"]
             if os.path.isdir(src):
@@ -445,11 +445,11 @@ def execute_tool(name: str, inputs: dict) -> str:
             else:
                 shutil.copy2(src, dst)
             return f"Copied {src} → {dst}"
-
+ 
         elif name == "file_move":
             shutil.move(inputs["source"], inputs["destination"])
             return f"Moved {inputs['source']} → {inputs['destination']}"
-
+ 
         elif name == "file_delete":
             path = inputs["path"]
             if os.path.isdir(path):
@@ -457,25 +457,89 @@ def execute_tool(name: str, inputs: dict) -> str:
             else:
                 os.remove(path)
             return f"Deleted: {path}"
-
+ 
         elif name == "file_create_dir":
             os.makedirs(inputs["path"], exist_ok=True)
             return f"Created directory: {inputs['path']}"
-
+ 
         elif name == "wait":
             time.sleep(inputs["seconds"])
             return f"Waited {inputs['seconds']}s"
-
+ 
         else:
             return f"Unknown tool: {name}"
-
+ 
     except Exception as e:
         return f"ERROR: {e}"
-
-
+ 
+ 
+# ── System prompt ──────────────────────────────────────────────────────────────
+# ── Memory system ──────────────────────────────────────────────────────────────
+MEMORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory.json")
+MAX_HISTORY  = 20   # max past exchanges to keep in memory
+MAX_FACTS    = 50   # max facts/preferences to store
+ 
+def load_memory() -> dict:
+    """Load memory from disk, or return a fresh structure."""
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"facts": [], "history": []}
+ 
+def save_memory(memory: dict) -> None:
+    """Persist memory to disk."""
+    try:
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(memory, f, indent=2, ensure_ascii=False, default=str)
+    except Exception as e:
+        print(f"  [memory] Could not save: {e}")
+ 
+def update_history(memory: dict, role: str, content: str) -> None:
+    """Append a message to rolling history, trimming to MAX_HISTORY exchanges."""
+    memory["history"].append({"role": role, "content": content})
+    # Keep only the last MAX_HISTORY messages (each exchange = 2 messages)
+    if len(memory["history"]) > MAX_HISTORY * 2:
+        memory["history"] = memory["history"][-(MAX_HISTORY * 2):]
+ 
+def extract_facts(memory: dict, user_msg: str, assistant_msg: str) -> None:
+    """
+    Simple heuristic: look for self-referential statements and preferences
+    and store them as facts so the AI remembers across sessions.
+    """
+    triggers = [
+        "my name is", "i am", "i'm", "i live", "i work", "i use",
+        "i prefer", "i like", "i hate", "i always", "i never",
+        "remember that", "remember:", "note that", "don't forget",
+    ]
+    for line in (user_msg + " " + assistant_msg).lower().split("."):
+        if any(t in line for t in triggers):
+            fact = line.strip().capitalize()
+            if fact and fact not in memory["facts"]:
+                memory["facts"].append(fact)
+    # Trim to max
+    memory["facts"] = memory["facts"][-MAX_FACTS:]
+ 
+def memory_summary(memory: dict) -> str:
+    """Build a concise summary string to inject into the system prompt."""
+    parts = []
+    if memory["facts"]:
+        parts.append("Facts you know about the user:\n" +
+                     "\n".join(f"- {f}" for f in memory["facts"]))
+    if memory["history"]:
+        lines = []
+        for m in memory["history"]:
+            role = "User" if m["role"] == "user" else "You"
+            lines.append(f"{role}: {m['content'][:200]}")
+        parts.append("Recent conversation history:\n" + "\n".join(lines))
+    return "\n\n".join(parts) if parts else ""
+ 
+ 
 # ── System prompt ──────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = f"""You are an AI assistant that controls a {platform.system()} computer on behalf of the user.
-
+ 
 You have tools for:
 - Mouse control (click, move, scroll)
 - Keyboard input (type text, hotkeys, special keys)
@@ -484,7 +548,7 @@ You have tools for:
 - App and URL launching
 - Shell commands
 - File operations (list, read, write, copy, move, delete, create dirs)
-
+ 
 Guidelines:
 - Break complex tasks into sequential tool calls.
 - For GUI interactions, take a screenshot first to see the current screen.
@@ -492,9 +556,9 @@ Guidelines:
 - Be concise — briefly explain what you're doing and why.
 - If something fails, try an alternative approach.
 - Screen coordinates start at (0,0) top-left. Use get_screen_size if needed.
-- Click a text field before typing into it.
+- Only use tools when the user explicitly asks you to do something on the PC. For conversational questions, just reply in text — do NOT take screenshots or move the mouse.
 """
-
+ 
 # ── Main agentic loop ──────────────────────────────────────────────────────────
 def run():
     print("\n╔══════════════════════════════════════════╗")
@@ -502,24 +566,49 @@ def run():
     print("║  Type your command. 'quit' to exit.      ║")
     print("║  Move mouse to top-left corner to abort. ║")
     print("╚══════════════════════════════════════════╝\n")
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-
+ 
+    # Load persistent memory
+    memory = load_memory()
+    if memory["facts"] or memory["history"]:
+        print(f"  [memory] Loaded {len(memory['facts'])} fact(s), "
+              f"{len(memory['history'])} past message(s).\n")
+ 
+    def build_system_message() -> str:
+        summary = memory_summary(memory)
+        if summary:
+            return SYSTEM_PROMPT + "\n\n--- YOUR MEMORY ---\n" + summary + "\n-------------------"
+        return SYSTEM_PROMPT
+ 
+    messages = [{"role": "system", "content": build_system_message()}]
+ 
     while True:
         try:
             user_input = input("You: ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting.")
+            save_memory(memory)
             break
-
+ 
         if not user_input:
             continue
+ 
+        # Memory management commands
         if user_input.lower() in ("quit", "exit", "q"):
+            save_memory(memory)
             print("Goodbye!")
             break
-
+        if user_input.lower() in ("memory", "show memory"):
+            summary = memory_summary(memory)
+            print("\n" + (summary if summary else "(memory is empty)") + "\n")
+            continue
+        if user_input.lower() in ("clear memory", "forget everything"):
+            memory = {"facts": [], "history": []}
+            save_memory(memory)
+            print("  [memory] Cleared.\n")
+            continue
+ 
         messages.append({"role": "user", "content": user_input})
-
+ 
         # Agentic loop — model may call multiple tools in sequence
         while True:
             try:
@@ -531,24 +620,34 @@ def run():
                     max_tokens=4096,
                 )
             except Exception as e:
-                print(f"\nAPI error: {e}\nRetrying without tools...")
+                print(f"\nAPI error (retrying without tools): {e}\n")
                 response = client.chat.completions.create(
                     model=MODEL,
                     messages=messages,
                     max_tokens=4096,
                 )
-
+ 
             msg = response.choices[0].message
             messages.append(msg)  # groq message objects are serialisable
-
+ 
             # Print any text the model produced
             if msg.content and msg.content.strip():
-                print(f"\nAssistant: {msg.content.strip()}\n")
-
+                reply_text = msg.content.strip()
+                print(f"\nAssistant: {reply_text}\n")
+ 
+                # No tool calls → end of turn; save to memory
+                if not msg.tool_calls:
+                    update_history(memory, "user", user_input)
+                    update_history(memory, "assistant", reply_text)
+                    extract_facts(memory, user_input, reply_text)
+                    save_memory(memory)
+                    # Refresh system message with updated memory for next turn
+                    messages[0] = {"role": "system", "content": build_system_message()}
+ 
             # No tool calls → model is done
             if not msg.tool_calls:
                 break
-
+ 
             # Execute each tool call and feed results back
             for tc in msg.tool_calls:
                 fn_name = tc.function.name
@@ -556,17 +655,17 @@ def run():
                     fn_args = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
                     fn_args = {}
-
+ 
                 print(f"  → [{fn_name}] {json.dumps(fn_args)}")
                 result = execute_tool(fn_name, fn_args)
                 print(f"  ← {result[:200]}")
-
+ 
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
                     "content": result,
                 })
-
-
+ 
+ 
 if __name__ == "__main__":
     run()
