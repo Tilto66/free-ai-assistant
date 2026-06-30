@@ -1,10 +1,3 @@
-"""
-AI PC Controller — GUI Version
---------------------------------
-Same as ai.py but with a tkinter GUI interface.
-Requirements: pip install groq pyautogui pygetwindow pillow
-"""
-
 import os
 import sys
 import json
@@ -143,7 +136,7 @@ def execute_tool(name, inputs):
 
 # ── Memory ─────────────────────────────────────────────────────────────────────
 MEMORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory.json")
-MAX_HISTORY, MAX_FACTS = 20, 50
+MAX_HISTORY, MAX_FACTS = 10, 30
 
 def load_memory():
     if os.path.exists(MEMORY_FILE):
@@ -357,7 +350,7 @@ class App(tk.Tk):
                             "role": "user",
                             "content": [
                                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                                {"type": "text", "text": "This is the screenshot. Describe what you see."}
+                                {"type": "text", "text": "This is the screenshot. Respond to the user based on this image."}
                             ]
                         })
                     else:
@@ -370,7 +363,7 @@ class App(tk.Tk):
 
     def _done(self):
         self.busy = False
-        self.send_btn.configure(state="normal", text="Send ▶")
+        self.send_btn.configure(state="normal", text="Send ->")
         self.status_var.set("Ready")
 
     def _show_memory(self):
@@ -379,8 +372,7 @@ class App(tk.Tk):
         win.title("Memory")
         win.geometry("500x400")
         win.configure(bg="#0f0f13")
-        txt = scrolledtext.ScrolledText(win, bg="#0d0d17", fg="#94a3b8",
-                                        font=("Consolas", 10), relief="flat", padx=10, pady=10)
+        txt = scrolledtext.ScrolledText(win, bg="#0d0d17", fg="#94a3b8", font=("Consolas", 10), relief="flat", padx=10, pady=10)
         txt.pack(fill="both", expand=True, padx=10, pady=10)
         txt.insert("1.0", summary if summary else "(memory is empty)")
         txt.configure(state="disabled")
