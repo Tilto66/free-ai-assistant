@@ -1,19 +1,3 @@
-"""
-AI PC Controller — powered by Groq (Free)
-------------------------------------------
-Controls your PC via natural language commands using Groq's free API.
-Capabilities: mouse/keyboard, file management, app launching, window management.
-
-Requirements:
-    pip install groq pyautogui pygetwindow
-
-Setup:
-    1. Sign up free at https://console.groq.com
-    2. Create an API key
-    3. Set env var: export GROQ_API_KEY=gsk_...
-    4. Run: python ai_pc_controller.py
-"""
-
 import os
 import sys
 import json
@@ -35,299 +19,27 @@ MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # ── Tool definitions ───────────────────────────────────────────────────────────
 TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "mouse_click",
-            "description": "Click the mouse at given screen coordinates. Use 'right' for context menus, 'double' for opening files.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer", "description": "X coordinate"},
-                    "y": {"type": "integer", "description": "Y coordinate"},
-                    "button": {"type": "string", "enum": ["left", "right", "double"], "description": "Click type (default: left)"},
-                },
-                "required": ["x", "y"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "mouse_move",
-            "description": "Move the mouse to a position without clicking.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer"},
-                    "y": {"type": "integer"},
-                },
-                "required": ["x", "y"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "mouse_scroll",
-            "description": "Scroll at a screen position. Positive clicks = scroll up, negative = scroll down.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "x": {"type": "integer"},
-                    "y": {"type": "integer"},
-                    "clicks": {"type": "integer", "description": "Positive = up, negative = down"},
-                },
-                "required": ["x", "y", "clicks"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "keyboard_type",
-            "description": "Type text at the current cursor position.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string", "description": "Text to type"},
-                },
-                "required": ["text"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "keyboard_hotkey",
-            "description": "Press a keyboard shortcut, e.g. ctrl+c, alt+F4, win+d.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "keys": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Keys to hold together, e.g. ['ctrl', 'c']",
-                    },
-                },
-                "required": ["keys"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "keyboard_press",
-            "description": "Press a single special key: enter, escape, tab, space, backspace, delete, up, down, left, right, f1-f12, etc.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "key": {"type": "string", "description": "Key name"},
-                },
-                "required": ["key"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_screen_size",
-            "description": "Returns the screen resolution (width x height).",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "take_screenshot",
-            "description": "Takes a screenshot and send it to the ai. Optionally specify a path to save the image.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Save path (default: screenshot.png)"},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_windows",
-            "description": "Lists all currently open application windows with their titles.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "focus_window",
-            "description": "Brings a window to the foreground by its title (partial match supported).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Window title or partial title"},
-                },
-                "required": ["title"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "close_window",
-            "description": "Closes a window by its title.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                },
-                "required": ["title"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "launch_app",
-            "description": "Launches an application, opens a file, or opens a URL.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "target": {"type": "string", "description": "App name, executable path, file path, or URL"},
-                },
-                "required": ["target"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_command",
-            "description": "Run a shell command and return its output. Use with caution.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {"type": "string", "description": "Shell command to run"},
-                    "timeout": {"type": "integer", "description": "Timeout in seconds (default: 10)"},
-                },
-                "required": ["command"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_list",
-            "description": "List files and folders in a directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Directory path (default: current directory)"},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_read",
-            "description": "Read the contents of a text file.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_write",
-            "description": "Write or overwrite a text file with given content.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "content": {"type": "string"},
-                },
-                "required": ["path", "content"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_copy",
-            "description": "Copy a file or directory to a new location.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "source": {"type": "string"},
-                    "destination": {"type": "string"},
-                },
-                "required": ["source", "destination"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_move",
-            "description": "Move or rename a file or directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "source": {"type": "string"},
-                    "destination": {"type": "string"},
-                },
-                "required": ["source", "destination"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_delete",
-            "description": "Delete a file or directory. Irreversible — confirm with the user first.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "file_create_dir",
-            "description": "Create a directory (including any missing intermediate directories).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "wait",
-            "description": "Pause for a number of seconds before the next action.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "seconds": {"type": "number"},
-                },
-                "required": ["seconds"],
-            },
-        },
-    },
+    {"type": "function", "function": {"name": "mouse_click", "description": "Click the mouse at given screen coordinates. Use 'right' for context menus, 'double' for opening files.", "parameters": {"type": "object", "properties": {"x": {"type": "integer", "description": "X coordinate"}, "y": {"type": "integer", "description": "Y coordinate"}, "button": {"type": "string", "enum": ["left", "right", "double"], "description": "Click type (default: left)"}}, "required": ["x", "y"]}}},
+    {"type": "function", "function": {"name": "mouse_move", "description": "Move the mouse to a position without clicking.", "parameters": {"type": "object", "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}}, "required": ["x", "y"]}}},
+    {"type": "function", "function": {"name": "mouse_scroll", "description": "Scroll at a screen position. Positive clicks = scroll up, negative = scroll down.", "parameters": {"type": "object", "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}, "clicks": {"type": "integer", "description": "Positive = up, negative = down"}}, "required": ["x", "y", "clicks"]}}},
+    {"type": "function", "function": {"name": "keyboard_type", "description": "Type text at the current cursor position.", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "Text to type"}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "keyboard_hotkey", "description": "Press a keyboard shortcut, e.g. ctrl+c, alt+F4, win+d.", "parameters": {"type": "object", "properties": {"keys": {"type": "array", "items": {"type": "string"}, "description": "Keys to hold together, e.g. ['ctrl', 'c']"}}, "required": ["keys"]}}},
+    {"type": "function", "function": {"name": "keyboard_press", "description": "Press a single special key: enter, escape, tab, space, backspace, delete, up, down, left, right, f1-f12, etc.", "parameters": {"type": "object", "properties": {"key": {"type": "string", "description": "Key name"}}, "required": ["key"]}}},
+    {"type": "function", "function": {"name": "get_screen_size", "description": "Returns the screen resolution (width x height).", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "take_screenshot", "description": "Takes a screenshot and send it to the ai. Optionally specify a path to save the image.", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Save path (default: screenshot.png)"}}}}},
+    {"type": "function", "function": {"name": "list_windows", "description": "Lists all currently open application windows with their titles.", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "focus_window", "description": "Brings a window to the foreground by its title (partial match supported).", "parameters": {"type": "object", "properties": {"title": {"type": "string", "description": "Window title or partial title"}}, "required": ["title"]}}},
+    {"type": "function", "function": {"name": "close_window", "description": "Closes a window by its title.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}}},
+    {"type": "function", "function": {"name": "launch_app", "description": "Launches an application, opens a file, or opens a URL.", "parameters": {"type": "object", "properties": {"target": {"type": "string", "description": "App name, executable path, file path, or URL"}}, "required": ["target"]}}},
+    {"type": "function", "function": {"name": "run_command", "description": "Run a shell command and return its output. Use with caution.", "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command to run"}, "timeout": {"type": "integer", "description": "Timeout in seconds (default: 10)"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "file_list", "description": "List files and folders in a directory.", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Directory path (default: current directory)"}}}}},
+    {"type": "function", "function": {"name": "file_read", "description": "Read the contents of a text file.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "file_write", "description": "Write or overwrite a text file with given content.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
+    {"type": "function", "function": {"name": "file_copy", "description": "Copy a file or directory to a new location.", "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "destination": {"type": "string"}}, "required": ["source", "destination"]}}},
+    {"type": "function", "function": {"name": "file_move", "description": "Move or rename a file or directory.", "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "destination": {"type": "string"}}, "required": ["source", "destination"]}}},
+    {"type": "function", "function": {"name": "file_delete", "description": "Delete a file or directory. Irreversible — confirm with the user first.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "file_create_dir", "description": "Create a directory (including any missing intermediate directories).", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "wait", "description": "Pause for a number of seconds before the next action.", "parameters": {"type": "object", "properties": {"seconds": {"type": "number"}}, "required": ["seconds"]}}},
 ]
  
 # ── Tool executor ──────────────────────────────────────────────────────────────
@@ -479,8 +191,8 @@ def execute_tool(name: str, inputs: dict) -> str:
 # ── System prompt ──────────────────────────────────────────────────────────────
 # ── Memory system ──────────────────────────────────────────────────────────────
 MEMORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory.json")
-MAX_HISTORY  = 20   # max past exchanges to keep in memory
-MAX_FACTS    = 50   # max facts/preferences to store
+MAX_HISTORY  = 10   # max past exchanges to keep in memory
+MAX_FACTS    = 30   # max facts/preferences to store
  
 def load_memory() -> dict:
     """Load memory from disk, or return a fresh structure."""
@@ -540,7 +252,7 @@ def memory_summary(memory: dict) -> str:
     return "\n\n".join(parts) if parts else ""
  
  
-# ── System prompt ──────────────────────────────────────────────────────────────
+# ── System boot prompt ──────────────────────────────────────────────────────────
 SYSTEM_PROMPT = f"""You are an AI assistant that controls a {platform.system()} computer on behalf of the user.
  
 You have tools for:
@@ -556,16 +268,16 @@ Guidelines:
 - Break complex tasks into sequential tool calls.
 - For GUI interactions, take a screenshot first to see the current screen.
 - Always confirm with the user before deleting files or running destructive commands.
-- Be concise — briefly explain what you're doing and why.
+- Be concise - briefly explain what you're doing and why.
 - If something fails, try an alternative approach.
 - Screen coordinates start at (0,0) top-left. Use get_screen_size if needed.
-- Only use tools when the user explicitly asks you to do something on the PC. For conversational questions, just reply in text — do NOT take screenshots or move the mouse.
+- Only use tools when the user explicitly asks you to do something on the PC. For conversational questions, just reply in text - do NOT take screenshots or move the mouse.
 """
  
 # ── Main agentic loop ──────────────────────────────────────────────────────────
 def run():
     print("\n╔══════════════════════════════════════════╗")
-    print("║   AI PC Controller — Groq (Free)         ║")
+    print("║   AI PC Controller — by Groq             ║")
     print("║  Type your command. 'quit' to exit.      ║")
     print("║  Move mouse to top-left corner to abort. ║")
     print("╚══════════════════════════════════════════╝\n")
